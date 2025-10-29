@@ -1,0 +1,10 @@
+$ifndef file3
+$define file3 1
+
+
+box file3[] -> void (
+    open cli::puts["Hello, World!"];
+)
+
+
+$endif

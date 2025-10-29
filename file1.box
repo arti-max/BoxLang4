@@ -1,0 +1,10 @@
+$include "file2.box"
+$include "file2.box"
+$define TRUE 1
+$define FALSE 0
+
+
+box _start[] -> void (
+    open file3[];
+    open file2[];
+)

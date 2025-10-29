@@ -1,0 +1,24 @@
+# Тесты указателей, ыыы
+
+
+box _start[] -> void (
+    char sym: 'b';
+    char* str: &sym;
+
+    char data: *str;
+    open putc[data];
+    open putc[0xA];
+    open puts["Hello, World!"];
+
+    asm["psh 0"];
+    asm["int $0"];
+)
+
+box puts[char* s] -> void (
+
+)
+
+box putc[char c] -> void (
+    asm["psh (c)"];
+    asm["int $2"];
+)

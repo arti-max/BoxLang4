@@ -1,0 +1,16 @@
+$ifndef file2
+$define file2 1
+
+$ifdef incl3
+$include "file3.box"
+$else
+box not_include[] -> void (
+    open cli::puts["Not Include File 3"];
+)
+$endif
+
+box file2[] -> void (
+    open cli::puts["file2, xd"];
+)
+
+$endif

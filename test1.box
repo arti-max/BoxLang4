@@ -1,0 +1,49 @@
+
+# Если ранняя версия компилятора пройдёт этот тест, то дальше будет легче
+# 1. главная фукнция _start обязательно должна быть в файле
+# asm вставки работают правильно (пока без подстановки аргументов)
+# вызов функций работает правильно, пролог и эпилог генерируются
+# простое создание переменных работает
+# передача переменных в аргументы функций
+
+num16 n16;
+num24 number2;
+
+box _start[] -> void (
+    char character_lol: 'd';
+    num24 local_var_24: 10;
+    n16 : 12;
+    number2 : n16;
+    open cli::putc[character_lol];
+
+    num24 test: (1+1)*2+(4/2);
+
+    open cli::newline[];
+
+    open cli::puts["Hello, World!"];
+
+    open hlt[0];
+)
+
+box hlt[char code] -> void (
+    asm["psh (code)"];
+    asm["int $0"];
+)
+
+namespace cli (
+
+    box puts[char* s] -> void (
+
+    )
+
+    box putc[char c] -> void (
+        asm["psh (c)"];
+        asm["int $2"];
+    )
+
+    box newline[] -> void (
+        asm["psh $A"];
+        asm["int $2"];
+    )
+
+)

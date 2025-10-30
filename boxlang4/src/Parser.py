@@ -7,6 +7,10 @@ class Parser:
         self.tokens = tokens;
         self.error_reporter = error_reporter
         self.pos = 0;
+        self.defines = {}
+        
+    def set_defines(self, defs):
+        self.defines = defs;
         
     def _error(self, token: Token, message: str, suggestion: str = None):
         self.error_reporter.report(
@@ -17,7 +21,7 @@ class Parser:
             "SyntaxError",
             suggestion
         )
-        raise RuntimeError("Parsing stopped due to syntax error.")
+        raise ParserError("Parsing stopped due to syntax error.")
     
     def _expect(self, expected_type: TokenType) -> Token:
         current = self.current_token()
@@ -61,7 +65,7 @@ class Parser:
             elif self.current_token().type == TokenType.NAMESPACE:
                 declarations.append(self.parse_namespace());
             else:
-                raise Exception("Expected declaration");
+                self._error(self.current_token(), "Expected a declaration (box, namespace, or variable).")
             
         return ProgramNode(declarations);
     
@@ -113,14 +117,20 @@ class Parser:
         return FunctionDeclarationNode(name, args, ret_type, body);
     
     def parse_statement(self) -> StatementNode:
-        if self.current_token().type in [TokenType.NUM16, TokenType.NUM24, TokenType.CHAR, TokenType.VOID]:
-            return self.parse_variable_declaration()
+        if self.current_token().type == TokenType.IF:
+            return self.parse_if_statement()
+        elif self.current_token().type == TokenType.WHILE:
+            return self.parse_while_statement()
+        elif self.current_token().type == TokenType.SWITCH:
+            return self.parse_switch_statement()
         elif self.current_token().type == TokenType.OPEN:
             return self.parse_function_call()
         elif self.current_token().type == TokenType.RET:
             return self.parse_return_statement()
         elif self.current_token().type == TokenType.ASM:
             return self.parse_inline_asm()
+        elif self.current_token().type in [TokenType.NUM16, TokenType.NUM24, TokenType.CHAR, TokenType.VOID]:
+            return self.parse_variable_declaration()
         else:
             return self.parse_assignment_statement()
             # raise Exception(f"Unknown statement: {self.current_token()}")
@@ -135,55 +145,58 @@ class Parser:
         return AssignmentNode(lvalue_expr, rvalue_expr);
     
     def parse_expression(self) -> ExpressionNode:
-        left = self.parse_term()
+        return self.parse_equality()
+    
+    def parse_equality(self) -> ExpressionNode:
+        left = self.parse_comparison()
+        while self.current_token().type in (TokenType.EQUAL_EQUAL, TokenType.NOT_EQUAL):
+            op = self.current_token()
+            self.advance()
+            right = self.parse_comparison()
+            left = BinaryOpNode(left, op, right)
+        return left
 
-        while self.current_token().type in (TokenType.PLUS, TokenType.MINUS):
-            op_token = self.current_token()
+    def parse_comparison(self) -> ExpressionNode:
+        left = self.parse_term()
+        while self.current_token().type in (TokenType.GREATHER_THAN, TokenType.GREATHER_EQUAL, TokenType.LESS_THAN, TokenType.LESS_EQUAL):
+            op = self.current_token()
             self.advance()
             right = self.parse_term()
-            left = BinaryOpNode(left, op_token, right)
-        
+            left = BinaryOpNode(left, op, right)
         return left
     
     def parse_term(self) -> ExpressionNode:
         left = self.parse_factor()
-
-        while self.current_token().type in (TokenType.STAR, TokenType.SLASH):
+        while self.current_token().type in (TokenType.PLUS, TokenType.MINUS):
             op_token = self.current_token()
             self.advance()
             right = self.parse_factor()
             left = BinaryOpNode(left, op_token, right)
-        
         return left
     
     def parse_factor(self) -> ExpressionNode:
-        token = self.current_token()
-        
-        if token.type in (TokenType.PLUS, TokenType.MINUS):
+        left = self.parse_unary()
+        while self.current_token().type in (TokenType.STAR, TokenType.SLASH):
+            op_token = self.current_token()
             self.advance()
-            operand = self.parse_factor()
-            return UnaryOpNode(token, operand)
-            
-        if token.type in (TokenType.STAR, TokenType.AMPERSAND):
+            right = self.parse_unary()
+            left = BinaryOpNode(left, op_token, right)
+        return left
+    
+    def parse_unary(self) -> ExpressionNode:
+        if self.current_token().type in (TokenType.PLUS, TokenType.MINUS, TokenType.STAR, TokenType.AMPERSAND):
+            op = self.current_token()
             self.advance()
-            operand = self.parse_factor()
-            return UnaryOpNode(token, operand)
-            
-        if token.type == TokenType.OPEN_PAREN:
-            if self.peek().type in [TokenType.CHAR, TokenType.NUM16, TokenType.NUM24]:
-                self.advance() # skip (
-                type_name = self.current_token().lexeme
-                self.advance()
-                
-                if self.current_token().type == TokenType.STAR:
-                    type_name += '*'
-                    self.advance()
-                
-                self._expect(TokenType.CLOSE_PAREN)
-                
-                expression_to_cast = self.parse_factor()
-                return TypeCastNode(type_name, expression_to_cast)
+            operand = self.parse_unary()
+            return UnaryOpNode(op, operand)
 
+        if self.current_token().type == TokenType.OPEN_PAREN and self.peek().type in (TokenType.CHAR, TokenType.NUM16, TokenType.NUM24, TokenType.VOID):
+            self.advance() # (
+            type_name = self._parse_type()
+            self._expect(TokenType.CLOSE_PAREN)
+            expression_to_cast = self.parse_unary()
+            return TypeCastNode(type_name, expression_to_cast)
+            
         return self.parse_primary()
 
     def parse_primary(self) -> ExpressionNode:
@@ -205,8 +218,13 @@ class Parser:
             return StringLiteralNode(token.lexeme, token)
             
         if token.type == TokenType.IDENT:
-            self.advance()
-            return VarAccessNode(token.lexeme, token)
+            if token.lexeme in self.defines:
+                defined_value = self.defines[token.lexeme]
+                self.advance()
+                return NumberLiteralNode(defined_value, token)
+            else:
+                self.advance()
+                return VarAccessNode(token.lexeme, token)
             
         if token.type == TokenType.OPEN_PAREN:
             self.advance()
@@ -282,3 +300,84 @@ class Parser:
         self._expect(TokenType.CLOSE_BRACKET)
         
         return FunctionCallNode(name, args, namespace, name_token)
+    
+    def parse_if_statement(self) -> IfNode:
+        if_token = self._expect(TokenType.IF)
+        self._expect(TokenType.OPEN_BRACKET)
+        condition = self.parse_expression()
+        self._expect(TokenType.CLOSE_BRACKET)
+        
+        self._expect(TokenType.OPEN_PAREN)
+        then_branch = []
+        while self.current_token().type != TokenType.CLOSE_PAREN:
+            then_branch.append(self.parse_statement())
+        self._expect(TokenType.CLOSE_PAREN)
+        
+        else_branch = None
+        if self.current_token().type == TokenType.ELSE:
+            self.advance()
+            self._expect(TokenType.OPEN_PAREN)
+            else_branch = []
+            while self.current_token().type != TokenType.CLOSE_PAREN:
+                else_branch.append(self.parse_statement())
+            self._expect(TokenType.CLOSE_PAREN)
+            
+        return IfNode(condition, then_branch, else_branch, if_token)
+    
+    def parse_while_statement(self) -> WhileNode:
+        while_token = self._expect(TokenType.WHILE)
+        self._expect(TokenType.OPEN_BRACKET)
+        condition = self.parse_expression()
+        self._expect(TokenType.CLOSE_BRACKET)
+        
+        self._expect(TokenType.OPEN_PAREN)
+        body = []
+        while self.current_token().type != TokenType.CLOSE_PAREN:
+            body.append(self.parse_statement())
+        self._expect(TokenType.CLOSE_PAREN)
+        
+        return WhileNode(condition, body, while_token)
+    
+    def parse_switch_statement(self) -> SwitchNode:
+        switch_token = self._expect(TokenType.SWITCH)
+        self._expect(TokenType.OPEN_BRACKET)
+        expression = self.parse_expression()
+        self._expect(TokenType.CLOSE_BRACKET)
+        
+        self._expect(TokenType.OPEN_PAREN)
+        
+        cases = []
+        default_case_body = None
+
+        while self.current_token().type != TokenType.CLOSE_PAREN:
+            if self.current_token().lexeme == 'case':
+                case_token = self.current_token()
+                self.advance()
+                
+                self._expect(TokenType.OPEN_BRACKET)
+                case_value = self.parse_expression()
+                self._expect(TokenType.CLOSE_BRACKET)
+                
+                self._expect(TokenType.OPEN_PAREN)
+                case_body = []
+                while self.current_token().type != TokenType.CLOSE_PAREN:
+                    case_body.append(self.parse_statement())
+                self._expect(TokenType.CLOSE_PAREN)
+                
+                cases.append(CaseNode(case_value, case_body, case_token))
+
+            elif self.current_token().lexeme == 'default':
+                if default_case_body is not None:
+                    self._error(self.current_token(), "Multiple default cases in switch statement.")
+                
+                self.advance()
+                self._expect(TokenType.OPEN_PAREN)
+                default_case_body = []
+                while self.current_token().type != TokenType.CLOSE_PAREN:
+                    default_case_body.append(self.parse_statement())
+                self._expect(TokenType.CLOSE_PAREN)
+            else:
+                self._error(self.current_token(), "Expected 'case' or 'default' inside switch block.")
+
+        self._expect(TokenType.CLOSE_PAREN)
+        return SwitchNode(expression, cases, default_case_body, switch_token)

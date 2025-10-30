@@ -43,7 +43,7 @@ class SemanticAnalyzer(ASTVisitor):
         else:
             print(f"Semantic Error: {message}")
             
-        raise Exception(message)
+        raise SemanticError(message)
 
     def visit_ProgramNode(self, node: ProgramNode):
         self.push_scope()
@@ -222,3 +222,50 @@ class SemanticAnalyzer(ASTVisitor):
         return node.var_type
 
     def visit_ParameterNode(self, node: ParameterNode): pass
+
+    def visit_IfNode(self, node: IfNode):
+        condition_type = self.visit(node.condition)
+        if 'num' not in condition_type and 'char' not in condition_type:
+            self._error("If condition must be of a numeric or char type.", node.condition)
+
+        self.push_scope()
+        for stmt in node.then_branch:
+            self.visit(stmt)
+        self.pop_scope()
+
+        if node.else_branch:
+            self.push_scope()
+            for stmt in node.else_branch:
+                self.visit(stmt)
+            self.pop_scope()
+            
+    def visit_WhileNode(self, node: WhileNode):
+        condition_type = self.visit(node.condition)
+        if 'num' not in condition_type and 'char' not in condition_type:
+            self._error("While condition must be of a numeric or char type.", node.condition)
+
+        self.push_scope()
+        for stmt in node.body:
+            self.visit(stmt)
+        self.pop_scope()
+        
+    def visit_SwitchNode(self, node: SwitchNode):
+        expr_type = self.visit(node.expression)
+        if 'num' not in expr_type and 'char' not in expr_type:
+            self._error("Switch expression must be of an integer or char type.", node.expression)
+            
+        for case_node in node.cases:
+            case_value_type = self.visit(case_node.value)
+            if expr_type != case_value_type:
+                self._error(f"Type mismatch between switch expression ('{expr_type}') and case value ('{case_value_type}').", case_node.value)
+            
+            self.push_scope()
+            for stmt in case_node.body:
+                self.visit(stmt)
+            self.pop_scope()
+
+        if node.default_case:
+            self.push_scope()
+            for stmt in node.default_case:
+                self.visit(stmt)
+            self.pop_scope()

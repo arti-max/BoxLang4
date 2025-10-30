@@ -1,0 +1,94 @@
+##
+## Тестовый набор для конструкций управления потоком
+##
+
+box putc[char c] -> void (
+    asm["psh (c)"];
+    asm["int $2"];
+)
+
+box print_nl[] -> void (
+    open putc[(char)0xA];  ## 0xA - код символа новой строки
+)
+
+box trap[] -> void (
+    asm["trap"];
+)
+
+box _start[] -> void (
+    
+    ## --- Тест 1: Простой if-else ---
+    ## Ожидаемый результат: на экране появится 'B'
+    num24 x: 10;
+    num24 y: 20;
+    if [x > y] (
+        open putc['A'];
+    ) else (
+        open putc['B'];
+    )
+    open print_nl[];
+
+    ## --- Тест 2: Вложенный if ---
+    ## Ожидаемый результат: на экране появится 'Y'
+    num24 p: 100;
+    if [p >= 100] (
+        num24 q: 50;
+        if [q < 40] (
+            open putc['X'];
+        ) else (
+            open putc['Y'];
+        )
+    )
+    open print_nl[];
+
+    ## --- Тест 3: while цикл ---
+    ## Ожидаемый результат: на экране появится '*****'
+    num24 counter: 5;
+    while [counter > 0] (
+        open putc['*'];
+        counter: counter - 1;
+    )
+    open print_nl[];
+    
+    ## --- Тест 4: switch/case ---
+    ## Ожидаемый результат: на экране появится '3'
+    char option: 'c';
+    num24 value: 0;
+
+    switch [option] (
+        case ['a'] (
+            value: 1;
+        )
+        case ['b'] (
+            value: 2;
+        )
+        case ['c'] (
+            value: 3;
+        )
+        default (
+            value: 99;
+        )
+    )
+    
+    ## Проверка, что сработал правильный case
+    ## 3 (значение 'c') -> 51 (ASCII '3')
+    if [value == 3] (
+        open putc['3'];
+    )
+    open print_nl[];
+
+    ## --- Тест 5: switch с default ---
+    ## Ожидаемый результат: на экране появится 'D'
+    char unknown_opt: 'z';
+    switch [unknown_opt] (
+        case ['x'] ( open putc['X']; )
+        case ['y'] ( open putc['Y']; )
+        default (
+            open putc['D'];
+        )
+    )
+    open print_nl[];
+
+    asm["psh 0"];
+    asm["int $0"];
+)

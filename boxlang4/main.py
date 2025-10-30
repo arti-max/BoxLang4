@@ -2,6 +2,8 @@ import os
 import sys
 import argparse
 
+from src.AST import ParserError, SemanticError
+
 from src.ASTPritner import ASTPrinter
 from src.ErrorReporter import ErrorReporter
 from src.SemanticAnalyzer import SemanticAnalyzer
@@ -57,6 +59,7 @@ def compile_lc24(filename: str):
         
     prep = Preprocessor(error_reporter)
     prep_data = prep.process(source_code, args.filepath)
+    defines = prep.get_defines()
     
     lexer = Lexer(prep_data, error_reporter)
     tokens = lexer.tokenize()
@@ -64,8 +67,14 @@ def compile_lc24(filename: str):
         print("\nLexical analysis failed.", file=sys.stderr)
         sys.exit(1)    
     
-    parser = Parser(tokens, error_reporter)
-    ast_root = parser.parse()
+    try:
+        parser = Parser(tokens, error_reporter)
+        parser.set_defines(defines)
+        ast_root = parser.parse()
+    except ParserError:
+        print("\nParsing failed.", file=sys.stderr)
+        sys.exit(1)
+        
     if error_reporter.had_error() or ast_root is None:
         print("\nParsing failed.", file=sys.stderr)
         sys.exit(1)
@@ -78,7 +87,7 @@ def compile_lc24(filename: str):
     try:
         semantic_analyzer = SemanticAnalyzer(error_reporter)
         semantic_analyzer.visit(ast_root)
-    except Exception:
+    except SemanticError:
         print("\nSemantic analysis failed.", file=sys.stderr)
         sys.exit(1)
         

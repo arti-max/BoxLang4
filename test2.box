@@ -16,7 +16,7 @@ box sum[num24 a, num24 b] -> num24 (
 
 box _start[] -> void (
     char sym: 'b';
-
+    
     char arrStart;
     char arr1;
     char arr2;

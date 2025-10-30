@@ -7,7 +7,14 @@ class TokenType(Enum):
     SHELF           = auto()    # shelf
     NAMESPACE       = auto()    # namespace
     RET             = auto()    # ret
-    
+    IF              = auto()    # if
+    ELSE            = auto()    # else
+    SWITCH          = auto()    # switch
+    WHILE           = auto()    # while
+    BREAK           = auto()    # break
+    CONTINUE        = auto()    # continue
+    CASE            = auto()    # case
+    DEFAULT         = auto()    # default
     
     # data type
     NUM16           = auto()    # num16
@@ -30,6 +37,12 @@ class TokenType(Enum):
     FLOAT_LIT       = auto()    # 123.45
     STR_LIT         = auto()    # "abc"
     CHAR_LIT        = auto()    # 'c'
+    
+    # conditions
+    EQUAL_EQUAL     = auto()    # ==
+    NOT_EQUAL       = auto()    # !=
+    LESS_EQUAL      = auto()    # <=
+    GREATHER_EQUAL  = auto()    # >=
     
     # other
     ARROW           = auto()    # ->

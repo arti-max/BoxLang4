@@ -1,6 +1,12 @@
 from typing import List, Optional
 from src.Token import Token
 
+class ParserError(Exception):
+    pass
+
+class SemanticError(Exception):
+    pass
+
 class ASTNode:
     def __repr__(self):
         return self.__class__.__name__;
@@ -105,4 +111,30 @@ class ReturnNode(StatementNode):
     def __init__(self, value: Optional[ExpressionNode], token: Token):
         super().__init__()
         self.value = value
+        self.token = token
+        
+class IfNode(StatementNode):
+    def __init__(self, condition: ExpressionNode, then_branch: list, else_branch: list, token: Token):
+        self.condition = condition
+        self.then_branch = then_branch
+        self.else_branch = else_branch
+        self.token = token
+
+class WhileNode(StatementNode):
+    def __init__(self, condition: ExpressionNode, body: list, token: Token):
+        self.condition = condition
+        self.body = body
+        self.token = token
+
+class CaseNode(ASTNode):
+    def __init__(self, value: ExpressionNode, body: list, token: Token):
+        self.value = value
+        self.body = body
+        self.token = token
+
+class SwitchNode(StatementNode):
+    def __init__(self, expression: ExpressionNode, cases: list, default_case: list, token: Token):
+        self.expression = expression
+        self.cases = cases
+        self.default_case = default_case
         self.token = token

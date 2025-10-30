@@ -5,6 +5,25 @@ from src.AST import *
 from src.Token import TokenType
 from src.utils import get_size_of_type, to_twos_complement_24bit
 
+class VariableCollector(ASTVisitor):
+    def __init__(self):
+        self.local_vars = {}
+        self.current_offset = 0
+
+    def visit_VarDeclarationNode(self, node: VarDeclarationNode):
+        var_name = node.var_name
+        var_type = node.var_type
+        size = get_size_of_type(var_type)
+        self.current_offset += size
+        self.local_vars[var_name] = {'type': var_type, 'offset': -self.current_offset}
+
+    def generic_visit(self, node):
+        for field_name, field_value in vars(node).items():
+            if field_name in ['then_branch', 'else_branch', 'body', 'cases', 'default_case']:
+                if field_value:
+                    for stmt in field_value:
+                        self.visit(stmt)
+
 class Compiler(ASTVisitor):
     def __init__(self, error_reporter: ErrorReporter):
         self.code = ""
@@ -16,9 +35,14 @@ class Compiler(ASTVisitor):
         self.registers = ['%ac', '%bs', '%cn', '%dc', '%dt', '%di']
         self.used_registers = set()
         self.current_func_name = None
+        self.label_counter = 0
         
     def get_generated_code(self) -> str:
         return self.code;
+    
+    def _new_label(self, prefix="L") -> str:
+        self.label_counter += 1
+        return f"_{prefix}_{self.current_func_name}_{self.label_counter}"
     
     def _get_current_namespace_prefix(self) -> str:
         if not self.namespace_stack:
@@ -54,32 +78,26 @@ class Compiler(ASTVisitor):
         self.code += f"; Function {name} \n";
         self.code += f"func_{name}: \n";
         
-        self.local_vars = {}
-        arg_offset = 6 # ret addr + bp
-        for param in node.params:
-            param_name = param.param_name;
-            param_type = param.param_type;
-            
-            self.local_vars[param_name] = {'type': param_type, 'offset': arg_offset}
-            arg_offset += 3;
+        collector = VariableCollector()
         
-        current_offset = 0;
+        self.local_vars = {}
+        arg_offset = 6
+        for param in node.params:
+            collector.local_vars[param.param_name] = {'type': param.param_type, 'offset': arg_offset}
+            arg_offset += 3
+        
         for stmt in node.body:
-            if isinstance(stmt, VarDeclarationNode):
-                var_name = stmt.var_name;
-                var_type = stmt.var_type;
-                
-                size = get_size_of_type(var_type);
-                current_offset += size;
-                
-                self.local_vars[var_name] = {'type': var_type, 'offset': -current_offset}
+            collector.visit(stmt)
+            
+        self.local_vars = collector.local_vars
+        total_local_size = collector.current_offset
         
         self.in_function = True;
         # prologue
         self.code += f"     psh %bp\n";
         self.code += f"     mov %bp %sp\n";
-        if current_offset > 0:
-            self.code += f"     sub %sp {current_offset}\n";
+        if total_local_size > 0:
+            self.code += f"    sub %sp {total_local_size}\n"
         
         for stmt in node.body:
             self.visit(stmt);
@@ -106,19 +124,26 @@ class Compiler(ASTVisitor):
     
     def visit_AsmNode(self, node: AsmNode):
         original_asm = node.code.strip()
-        parts = original_asm.split(' ', 1)
-        mnemonic = parts[0]
-        
-        placeholders = re.findall(r'\((\w+)\)', original_asm);
-        
+        placeholders = re.findall(r'\((\w+)\)', original_asm)
+
         if not placeholders:
-            self.code += f"    {original_asm}\n"
+            self.code += f"     {original_asm}\n"
             return
-        
+
+        mnemonic = original_asm.split(' ', 1)[0]
         if mnemonic == 'psh' and len(placeholders) == 1:
             var_name = placeholders[0]
-            
-            self.visit(VarAccessNode(var_name))
+
+            if var_name not in self.local_vars:
+                raise Exception(f"Compiler error: unknown variable '{var_name}' in inline asm.")
+
+            var_info = self.local_vars[var_name]
+            var_type = var_info['type']
+
+            temp_node = VarAccessNode(var_name)
+            temp_node.var_type = var_type
+
+            self.visit(temp_node)
             return
         
         temp_regs = []
@@ -269,27 +294,68 @@ class Compiler(ASTVisitor):
         return node.var_type
         
     def visit_BinaryOpNode(self, node: BinaryOpNode):
-        self.visit(node.right);
-        left_type = self.visit(node.left);
-        
-        self.code += f"     pop %ac\n"; # left
-        self.code += f"     pop %bs\n"; # right
-        
         op = node.op.type;
-        if op == TokenType.PLUS:
-            self.code += f"     add %ac %bs\n";
-        elif op == TokenType.MINUS:
-            self.code += f"     sub %ac %bs\n";
-        elif op == TokenType.STAR:
-            self.code += f"     mul %ac %bs\n";
-        elif op == TokenType.SLASH:
-            self.code += f"     div %ac %bs\n";
+        
+        simple_comparison_map = {
+            TokenType.EQUAL_EQUAL: "je",
+            TokenType.NOT_EQUAL:   "jne",
+            TokenType.LESS_THAN:   "jl",
+            TokenType.GREATHER_THAN: "jg",
+        }
+
+        complex_comparison_map = {
+            TokenType.LESS_EQUAL:     ("jl", "je"),
+            TokenType.GREATHER_EQUAL: ("jg", "je"),
+        }
+        
+        if op in simple_comparison_map or op in complex_comparison_map:
+            self.visit(node.right)
+            self.visit(node.left)
+            self.code += "    pop %ac\n"
+            self.code += "    pop %bs\n"
+            
+            true_label = self._new_label("true")
+            end_label = self._new_label("end_cmp")
+            
+            self.code += "    cmp %ac %bs\n"
+            
+            if op in simple_comparison_map:
+                self.code += f"    {simple_comparison_map[op]} {true_label}\n"
+            else:
+                instr1, instr2 = complex_comparison_map[op]
+                self.code += f"    {instr1} {true_label}\n"
+                self.code += "    cmp %ac %bs\n"
+                self.code += f"    {instr2} {true_label}\n"
+
+            self.code += "    psh 0\n"
+            self.code += f"    jmp {end_label}\n"
+            self.code += f"{true_label}:\n"
+            self.code += "    psh 1\n"
+            self.code += f"{end_label}:\n"
+            
+            return "num24" 
+        
         else:
-            pass
-        
-        self.code += f"     psh %ac\n";
-        
-        return left_type
+            self.visit(node.right);
+            left_type = self.visit(node.left);
+            
+            self.code += f"     pop %ac\n"; # left
+            self.code += f"     pop %bs\n"; # right
+            
+            if op == TokenType.PLUS:
+                self.code += f"     add %ac %bs\n";
+            elif op == TokenType.MINUS:
+                self.code += f"     sub %ac %bs\n";
+            elif op == TokenType.STAR:
+                self.code += f"     mul %ac %bs\n";
+            elif op == TokenType.SLASH:
+                self.code += f"     div %ac %bs\n";
+            else:
+                pass
+            
+            self.code += f"     psh %ac\n";
+            
+            return left_type
         
     def visit_StringLiteralNode(self, node: StringLiteralNode):
         label = f"__str_{self.str_counter}";
@@ -346,7 +412,6 @@ class Compiler(ASTVisitor):
             
             self.code += "    psh %ac\n"
             
-
     def visit_TypeCastNode(self, node: TypeCastNode):
         self.visit(node.expression);
         return node.target_type;
@@ -357,3 +422,85 @@ class Compiler(ASTVisitor):
             self.code += "    pop %ac\n"
         
         self.code += f"    jmp .end\n"
+        
+    def visit_IfNode(self, node: IfNode):
+        else_label = self._new_label("else")
+        end_if_label = self._new_label("endif")
+
+        self.visit(node.condition)
+        self.code += "     pop %ac\n"
+        self.code += "     cmp %ac 0\n"
+
+        target_label_on_false = else_label if node.else_branch else end_if_label
+        self.code += f"     je {target_label_on_false}\n"
+
+        for stmt in node.then_branch:
+            self.visit(stmt)
+
+        if node.else_branch:
+            self.code += f"     jmp {end_if_label}\n"
+            self.code += f"{else_label}:\n"
+            for stmt in node.else_branch:
+                self.visit(stmt)
+
+        self.code += f"{end_if_label}:\n"
+        
+    def visit_WhileNode(self, node: WhileNode):
+        start_label = self._new_label("while_start")
+        end_label = self._new_label("while_end")
+
+        self.code += f"{start_label}:\n"
+
+        self.visit(node.condition)
+        self.code += "    pop %ac\n"
+        self.code += "    cmp %ac 0\n"
+        self.code += f"    je {end_label}\n"
+
+        for stmt in node.body:
+            self.visit(stmt)
+
+        self.code += f"    jmp {start_label}\n"
+
+        self.code += f"{end_label}:\n"
+        
+    def visit_SwitchNode(self, node: SwitchNode):
+        end_switch_label = self._new_label("switch_end")
+        default_label = self._new_label("default") if node.default_case else end_switch_label
+
+        case_labels = [self._new_label(f"case_body_{i}") for i in range(len(node.cases))]
+        
+        self.visit(node.expression)
+
+        for i, case_node in enumerate(node.cases):
+            case_body_label = case_labels[i]
+
+            self.code += "     pop %ac\n"
+            self.code += "     psh %ac\n"
+            self.code += "     psh %ac\n"
+
+            self.visit(case_node.value)
+            self.code += "     pop %bs\n"
+
+            self.code += "     pop %ac\n"
+            self.code += "     cmp %ac %bs\n"
+            self.code += f"    je {case_body_label}\n"
+
+        self.code += "     add %sp 3\n"
+        self.code += f"    jmp {default_label}\n"
+
+        for i, case_node in enumerate(node.cases):
+            self.code += f"{case_labels[i]}:\n"
+            
+            self.code += "     add %sp 3\n"
+            
+            for stmt in case_node.body:
+                self.visit(stmt)
+                
+            self.code += f"    jmp {end_switch_label}\n"
+
+        if node.default_case:
+            self.code += f"{default_label}:\n"
+            for stmt in node.default_case:
+                self.visit(stmt)
+
+        self.code += f"{end_switch_label}:\n"

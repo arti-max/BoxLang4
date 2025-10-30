@@ -23,6 +23,12 @@ class Lexer:
             'void': TokenType.VOID,
             'namespace': TokenType.NAMESPACE,
             'ret': TokenType.RET,
+            'if': TokenType.IF,
+            'else': TokenType.ELSE,
+            'switch': TokenType.SWITCH,
+            'while': TokenType.WHILE,
+            'case': TokenType.CASE,
+            'default': TokenType.DEFAULT,
         }
         
     def _error(self, message: str, suggestion: str = None):
@@ -225,6 +231,18 @@ class Lexer:
                 self.advance(2); continue;
             if (char == '-') and (peek == '>'):
                 tokens.append(self.create_token(TokenType.ARROW, '->'));
+                self.advance(2); continue;
+            if (char == '=') and (peek == '='):
+                tokens.append(self.create_token(TokenType.EQUAL_EQUAL, '=='));
+                self.advance(2); continue;
+            if (char == '!') and (peek == '='):
+                tokens.append(self.create_token(TokenType.NOT_EQUAL, '!='));
+                self.advance(2); continue;
+            if (char == '<') and (peek == '='):
+                tokens.append(self.create_token(TokenType.LESS_EQUAL, '<='));
+                self.advance(2); continue;
+            if (char == '>') and (peek == '='):
+                tokens.append(self.create_token(TokenType.GREATHER_EQUAL, '>='));
                 self.advance(2); continue;
             
             symbol_map = {

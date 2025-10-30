@@ -7,6 +7,9 @@ class Preprocessor:
         self.out = "";
         self.skip_stack = [False]
         
+    def get_defines(self) -> dict:
+        return self.defines
+        
     def process(self, lines: list[str], filename: str):
         if not self.skip_stack[-1]:
             self.out += f'$file "{filename}"\n'

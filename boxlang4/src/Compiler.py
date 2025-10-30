@@ -3,7 +3,7 @@ from src.ASTVisitor import ASTVisitor
 from src.ErrorReporter import ErrorReporter
 from src.AST import *
 from src.Token import TokenType
-from src.utils import get_size_of_type
+from src.utils import get_size_of_type, to_twos_complement_24bit
 
 class Compiler(ASTVisitor):
     def __init__(self, error_reporter: ErrorReporter):
@@ -300,7 +300,9 @@ class Compiler(ASTVisitor):
         return 'char*';
         
     def visit_NumberLiteralNode(self, node: NumberLiteralNode):
-        self.code += f"     psh {node.value}\n";
+        value = int(node.value)
+        unsigned_value = to_twos_complement_24bit(value)
+        self.code += f"     psh {unsigned_value}    ; {value}\n";
         return 'num24';
         
     def visit_CharLiteralNode(self, node: CharLiteralNode):

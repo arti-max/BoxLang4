@@ -1,0 +1,58 @@
+box _start[] -> void (
+    ## ===============================================
+    ## Тесты для Оптимизации Уровня 1 (-O1)
+    ## Свертывание констант (Constant Folding)
+    ## ===============================================
+
+    ## Базовые операции
+    num24 const1: 2 + 3;          ## Ожидаемый результат в AST: NumberLiteralNode(5)
+    num24 const2: 10 - 4;         ## -> NumberLiteralNode(6)
+    num24 const3: 5 * 6;          ## -> NumberLiteralNode(30)
+    num24 const4: 20 / 4;         ## -> NumberLiteralNode(5)
+
+    ## Приоритет операторов
+    num24 precedence1: 2 + 3 * 4;  ## -> 2 + 12  -> NumberLiteralNode(14)
+    num24 precedence2: 20 - 8 / 2; ## -> 20 - 4  -> NumberLiteralNode(16)
+
+    ## Выражения в скобках
+    num24 parens1: (2 + 3) * 4;    ## -> 5 * 4   -> NumberLiteralNode(20)
+    num24 parens2: 30 / (2 + 3);   ## -> 30 / 5  -> NumberLiteralNode(6)
+
+    ## Унарные операторы
+    num24 unary1: -10 + 5;         ## -> NumberLiteralNode(-5)
+    num24 unary2: 10 + -5;         ## -> NumberLiteralNode(5)
+    num24 unary3: -(5 + 5);        ## -> -(10)   -> NumberLiteralNode(-10)
+
+    ## Длинная цепочка
+    num24 long_chain: 1 + 2 * 3 + 4 / 2 - 1; ## -> 1 + 6 + 2 - 1 -> NumberLiteralNode(8)
+
+
+    ## ===============================================
+    ## Тесты для Оптимизации Уровня 2 (-O2)
+    ## Алгебраические упрощения
+    ## ===============================================
+
+    ## Переменные для тестов
+    num24 x: 100;
+    num24 y: 200;
+
+    ## Устранение нейтральных элементов (x + 0, x * 1, и т.д.)
+    num24 strength1: x + 0;       ## Ожидаемый результат в AST: VarAccessNode(x)
+    num24 strength2: 0 + y;       ## -> VarAccessNode(y)
+    num24 strength3: x - 0;       ## -> VarAccessNode(x)
+    num24 strength4: y * 1;       ## -> VarAccessNode(y)
+    num24 strength5: 1 * x;       ## -> VarAccessNode(x)
+    num24 strength6: y / 1;       ## -> VarAccessNode(y)
+
+    ## Аннигиляция (свойства нуля, x * 0)
+    num24 strength7: x * 0;       ## -> NumberLiteralNode(0)
+    num24 strength8: 0 * y;       ## -> NumberLiteralNode(0)
+
+
+    ## ===============================================
+    ## Тесты на будущие ошибки
+    ## ===============================================
+
+    ## Тест с делением на ноль (должен вызывать ошибку компиляции с -O1 и выше)
+    ## num24 div_zero: 100 / (5 - 5); 
+)

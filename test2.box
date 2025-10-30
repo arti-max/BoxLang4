@@ -27,13 +27,16 @@ box _start[] -> void (
     void* lol;
     char* l2: (char*)lol;
 
-    *(char*)(&arrStart-1): 't';
+    *(char*)(&arrStart+1): 't';
 
     char data: *(char*)(&sym);
-    open putc[*(char*)(&arrStart-1)];
+
+    open putc[*(char*)(&arrStart+1)];
     open putc[(char)0xA];
+
     open putc[res];
     open putc[(char)0xA];
+
     open puts["Hello, World!"];
 
     asm["psh 0"];

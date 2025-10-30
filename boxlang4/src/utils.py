@@ -22,3 +22,8 @@ def get_size_of_type(type_name: str) -> int:
         if type_name == 'char':
             return 1
         return 0
+    
+def to_twos_complement_24bit(value: int) -> int:
+    if value < 0:
+        value = (1 << 24) + value
+    return value

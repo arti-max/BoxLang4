@@ -192,7 +192,6 @@ class Lexer:
         tokens = [];
         while self.current_char is not None:
             if (self.src[self.pos:].startswith('$file')):
-                print(self.src[self.pos:]);
                 self.process_file_directive();
                 continue;
 

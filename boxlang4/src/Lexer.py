@@ -22,6 +22,7 @@ class Lexer:
             'char': TokenType.CHAR,
             'void': TokenType.VOID,
             'namespace': TokenType.NAMESPACE,
+            'ret': TokenType.RET,
         }
         
     def _error(self, message: str, suggestion: str = None):
@@ -241,6 +242,7 @@ class Lexer:
                 ':': TokenType.COLON,
                 ';': TokenType.SEMICOLON,
                 '&': TokenType.AMPERSAND,
+                ',': TokenType.COMMA,
             }
             
             if char in symbol_map:

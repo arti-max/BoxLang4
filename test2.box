@@ -1,18 +1,6 @@
 # Тесты указателей, ыыы
 
 
-box _start[] -> void (
-    char sym: 'b';
-
-    char data: *(char*)(&sym);
-    open putc[data];
-    open putc[0xA];
-    open puts["Hello, World!"];
-
-    asm["psh 0"];
-    asm["int $0"];
-)
-
 box puts[char* s] -> void (
 
 )
@@ -20,4 +8,34 @@ box puts[char* s] -> void (
 box putc[char c] -> void (
     asm["psh (c)"];
     asm["int $2"];
+)
+
+box sum[num24 a, num24 b] -> num24 (
+    ret a+b;
+)
+
+box _start[] -> void (
+    char sym: 'b';
+
+    char arrStart;
+    char arr1;
+    char arr2;
+    char arr3;
+
+    char res: (char)open sum[(num24)'e', 1];
+
+    void* lol;
+    char* l2: (char*)lol;
+
+    *(char*)(&arrStart-1): 't';
+
+    char data: *(char*)(&sym);
+    open putc[*(char*)(&arrStart-1)];
+    open putc[(char)0xA];
+    open putc[res];
+    open putc[(char)0xA];
+    open puts["Hello, World!"];
+
+    asm["psh 0"];
+    asm["int $0"];
 )

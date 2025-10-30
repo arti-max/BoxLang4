@@ -3,6 +3,7 @@ import sys
 
 from src.ASTPritner import ASTPrinter
 from src.ErrorReporter import ErrorReporter
+from src.SemanticAnalyzer import SemanticAnalyzer
 
 from src.Preprocessor import Preprocessor
 from src.Lexer import Lexer
@@ -22,15 +23,15 @@ def compile_lc24(filename: str):
         return
     prep = Preprocessor(error_reporter);
     prep_data = prep.process(lines, filename)
-    print(prep_data);
+    # print(prep_data);
     lexer = Lexer(prep_data, error_reporter);
-    print("=" * 64);
+    # print("=" * 64);
     tokens = lexer.tokenize();
     if error_reporter.had_error():
         print("\nError while lexer igralsa s codom.", file=sys.stderr)
         return
-    print(tokens);
-    print("=" * 64);
+    # print(tokens);
+    # print("=" * 64);
     parser = Parser(tokens, error_reporter);
     ast_root = None
     try:
@@ -42,7 +43,14 @@ def compile_lc24(filename: str):
         print("\nSyntax errors.", file=sys.stderr)
         return
 
-    printer.print(ast_root)
+    # printer.print(ast_root)
+    
+    try:
+        semantic_analyzer = SemanticAnalyzer(error_reporter)
+        semantic_analyzer.visit(ast_root)
+    except Exception as e:
+        print(f"Semantic Error: {e}")
+        exit(1)
     
     compiler = Compiler(error_reporter)
     compiler.visit(ast_root)

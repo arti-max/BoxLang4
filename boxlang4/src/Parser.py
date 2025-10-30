@@ -30,6 +30,16 @@ class Parser:
             f"expected {expected_type.name} but found {current.type.name}",
             f"Try replacing '{current.lexeme}' with the expected token."
         )
+        
+    def _parse_type(self) -> str:
+        type_lexeme = self.current_token().lexeme
+        self.advance()
+        
+        if self.current_token().type == TokenType.STAR:
+            type_lexeme += '*'
+            self.advance()
+            
+        return type_lexeme
     
     def current_token(self):
         return self.tokens[self.pos]
@@ -56,11 +66,8 @@ class Parser:
         return ProgramNode(declarations);
     
     def parse_variable_declaration(self) -> VarDeclarationNode:
-        var_type = self.current_token().lexeme;
-        self.advance();
-        if self.current_token().type == TokenType.STAR:
-            var_type += '*'
-            self.advance()
+        var_type = self._parse_type()
+        var_name_token = self.current_token()
         var_name = self.current_token().lexeme;
         self.advance();
         initial_value = None
@@ -68,7 +75,7 @@ class Parser:
             self.advance(); # skip :
             initial_value = self.parse_expression();
         self._expect(TokenType.SEMICOLON);
-        return VarDeclarationNode(var_type, var_name, initial_value);
+        return VarDeclarationNode(var_type, var_name, initial_value, var_name_token)
     
     def parse_function_declaration(self) -> FunctionDeclarationNode:
         self._expect(TokenType.BOX)
@@ -79,11 +86,7 @@ class Parser:
         
         args = []
         while self.current_token().type != TokenType.CLOSE_BRACKET:
-            _type = self.current_token().lexeme;
-            self.advance()
-            if self.current_token().type == TokenType.STAR:
-                _type += '*'
-                self.advance()
+            _type = self._parse_type()
             _name = self.current_token().lexeme
             self.advance()
             node = ParameterNode(_type, _name);
@@ -97,8 +100,7 @@ class Parser:
         self._expect(TokenType.CLOSE_BRACKET)
         
         self._expect(TokenType.ARROW)
-        ret_type = self.current_token().lexeme;
-        self.advance()  # skip return type
+        ret_type = self._parse_type()
         self._expect(TokenType.OPEN_PAREN)
             
         body = []
@@ -111,23 +113,26 @@ class Parser:
         return FunctionDeclarationNode(name, args, ret_type, body);
     
     def parse_statement(self) -> StatementNode:
-        if self.current_token().type in [TokenType.NUM16, TokenType.NUM24, TokenType.CHAR]:
+        if self.current_token().type in [TokenType.NUM16, TokenType.NUM24, TokenType.CHAR, TokenType.VOID]:
             return self.parse_variable_declaration()
-        elif self.current_token().type == TokenType.IDENT and self.peek().type == TokenType.COLON:
-            return self.parse_assignment_statement()
         elif self.current_token().type == TokenType.OPEN:
-            return self.parse_function_call();
+            return self.parse_function_call()
+        elif self.current_token().type == TokenType.RET:
+            return self.parse_return_statement()
         elif self.current_token().type == TokenType.ASM:
-            return self.parse_inline_asm();
+            return self.parse_inline_asm()
         else:
-            raise Exception(f"Unknown statement: {self.current_token()}")
+            return self.parse_assignment_statement()
+            # raise Exception(f"Unknown statement: {self.current_token()}")
     
     def parse_assignment_statement(self) -> AssignmentNode:
-        var_name = self._expect(TokenType.IDENT).lexeme;
-        self._expect(TokenType.COLON);
-        expr = self.parse_expression();
-        self._expect(TokenType.SEMICOLON);
-        return AssignmentNode(VarAccessNode(var_name), expr);
+        
+        lvalue_expr = self.parse_expression()
+        self._expect(TokenType.COLON)
+        rvalue_expr = self.parse_expression()
+        self._expect(TokenType.SEMICOLON)
+        
+        return AssignmentNode(lvalue_expr, rvalue_expr);
     
     def parse_expression(self) -> ExpressionNode:
         left = self.parse_term()
@@ -183,18 +188,25 @@ class Parser:
 
     def parse_primary(self) -> ExpressionNode:
         token = self.current_token()
-
+        
+        if token.type == TokenType.OPEN:
+            return self._parse_function_call_expression()
+        
         if token.type == TokenType.INT_LIT:
             self.advance()
-            return NumberLiteralNode(token.lexeme)
+            return NumberLiteralNode(token.lexeme, token)
         
         if token.type == TokenType.CHAR_LIT:
             self.advance()
-            return CharLiteralNode(token.lexeme)
+            return CharLiteralNode(token.lexeme, token)
+        
+        if token.type == TokenType.STR_LIT:
+            self.advance()
+            return StringLiteralNode(token.lexeme, token)
             
         if token.type == TokenType.IDENT:
             self.advance()
-            return VarAccessNode(token.lexeme)
+            return VarAccessNode(token.lexeme, token)
             
         if token.type == TokenType.OPEN_PAREN:
             self.advance()
@@ -205,46 +217,9 @@ class Parser:
         self._error(token, "Expected an expression (literal, variable, or parentheses).")
     
     def parse_function_call(self) -> StatementNode:
-        self._expect(TokenType.OPEN)
-        name = ""
-        namespace = ""
-        if self.peek().type == TokenType.COLON_D:
-            namespace = self.current_token().lexeme;
-            self.advance();
-            self.advance();
-            
-        name = self.current_token().lexeme;
-        self.advance();
-        self._expect(TokenType.OPEN_BRACKET)
-        
-        args = []
-        while self.current_token().type != TokenType.CLOSE_BRACKET:
-            current_tok = self.current_token()
-            
-            if (current_tok.type == TokenType.INT_LIT):
-                args.append(NumberLiteralNode(current_tok.lexeme));
-                self.advance();
-            elif (current_tok.type == TokenType.CHAR_LIT):
-                args.append(CharLiteralNode(current_tok.lexeme));
-                self.advance();
-            elif (current_tok.type == TokenType.STR_LIT):
-                args.append(StringLiteralNode(current_tok.lexeme));
-                self.advance();
-            elif current_tok.type == TokenType.IDENT:
-                args.append(VarAccessNode(current_tok.lexeme));
-                self.advance();
-            else:
-                self._error(current_tok, "Expected an expression (literal or variable) as an argument.");
-                
-            if self.current_token().type == TokenType.COMMA:
-                self.advance() # skip ,
-            elif self.current_token().type != TokenType.CLOSE_BRACKET:
-                self._error(self.current_token(),"Ti proebal zapatuiyu (,)");
-            
-        self._expect(TokenType.CLOSE_BRACKET)
+        call_node = self._parse_function_call_expression()
         self._expect(TokenType.SEMICOLON)
-        
-        return FunctionCallNode(name, args, namespace);
+        return call_node
         
     def parse_inline_asm(self) -> StatementNode:
         self.advance()  # skip asm
@@ -270,3 +245,40 @@ class Parser:
             
         self.advance()  # skip )
         return NamespaceNode(name, body);
+    
+    def parse_return_statement(self) -> ReturnNode:
+        ret_token = self._expect(TokenType.RET)
+        
+        value = None
+        if self.current_token().type != TokenType.SEMICOLON:
+            value = self.parse_expression()
+            
+        self._expect(TokenType.SEMICOLON)
+        return ReturnNode(value, ret_token)
+    
+    def _parse_function_call_expression(self) -> FunctionCallNode:
+        self._expect(TokenType.OPEN)
+        name = ""
+        namespace = ""
+        if self.peek().type == TokenType.COLON_D:
+            namespace = self.current_token().lexeme;
+            self.advance();
+            self.advance();
+        
+        name_token = self.current_token()
+        name = self.current_token().lexeme;
+        self.advance();
+        self._expect(TokenType.OPEN_BRACKET)
+        
+        args = []
+        while self.current_token().type != TokenType.CLOSE_BRACKET:
+            argument_expression = self.parse_expression()
+            args.append(argument_expression)
+                
+            if self.current_token().type == TokenType.COMMA:
+                self.advance() # skip ,
+            elif self.current_token().type != TokenType.CLOSE_BRACKET:
+                self._error(self.current_token(),"Ti proebal zapatuiyu (,)");
+        self._expect(TokenType.CLOSE_BRACKET)
+        
+        return FunctionCallNode(name, args, namespace, name_token)

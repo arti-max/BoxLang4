@@ -15,6 +15,7 @@ class Compiler(ASTVisitor):
         self.in_function = False
         self.registers = ['%ac', '%bs', '%cn', '%dc', '%dt', '%di']
         self.used_registers = set()
+        self.current_func_name = None
         
     def get_generated_code(self) -> str:
         return self.code;
@@ -49,6 +50,7 @@ class Compiler(ASTVisitor):
     def visit_FunctionDeclarationNode(self, node: FunctionDeclarationNode):
         prefix = self._get_current_namespace_prefix()
         name = f"{prefix}{node.name}";
+        self.current_func_name = name
         self.code += f"; Function {name} \n";
         self.code += f"func_{name}: \n";
         
@@ -81,11 +83,14 @@ class Compiler(ASTVisitor):
         
         for stmt in node.body:
             self.visit(stmt);
-            
+        
+        self.code += ".end:\n" 
         self.code += f"     mov %sp %bp\n";
         self.code += f"     pop %bp\n";
         self.code += f"     ret\n";
+        
         self.in_function = False;
+        self.current_func_name = None
         
     def visit_FunctionCallNode(self, node: FunctionCallNode):
         
@@ -96,6 +101,8 @@ class Compiler(ASTVisitor):
         self.code += f"     jsr func_{call_name}\n";
         if (len(node.args) > 0):
             self.code += f"     add %sp {len(node.args) * 3}\n";
+        if node.var_type != 'void':
+            self.code += "    psh %ac\n"
     
     def visit_AsmNode(self, node: AsmNode):
         original_asm = node.code.strip()
@@ -194,32 +201,52 @@ class Compiler(ASTVisitor):
         
         
     def visit_AssignmentNode(self, node: AssignmentNode):
-        self.visit(node.expression);
-        self.code += f"     pop %ac\n";
-        if node.variable.var_name in self.local_vars:
-            node.variable.var_type = self.local_vars[node.variable.var_name]['type'];
-            offset = self.local_vars[node.variable.var_name]['offset'];
-            self.code += f"     mov %bs %bp\n";
-            if offset > 0:
-                self.code += f"     add %bs {offset}\n";
+        lvalue = node.variable
+        rvalue = node.expression
+        
+        if isinstance(lvalue, VarAccessNode):
+            self.visit(rvalue);
+            self.code += f"     pop %ac\n";
+            if node.variable.var_name in self.local_vars:
+                offset = self.local_vars[node.variable.var_name]['offset'];
+                self.code += f"     mov %bs %bp\n";
+                if offset > 0:
+                    self.code += f"     add %bs {offset}\n";
+                else:
+                    self.code += f"     sub %bs {-offset}\n";
             else:
-                self.code += f"     sub %bs {-offset}\n";
-        else:
-            prefix = self._get_current_namespace_prefix();
-            var_name = f"{prefix}{node.variable.var_name}";
-            self.code += f"     mov %bs __var_{var_name}\n";
+                prefix = self._get_current_namespace_prefix();
+                var_name = f"{prefix}{node.variable.var_name}";
+                self.code += f"     mov %bs __var_{var_name}\n";
+                
+            if (node.variable.var_type == 'num16') or (node.variable.var_type == 'f16'):
+                self.code += f"     sw %bs %ac\n";
+            elif (node.variable.var_type.endswith('*')) or (node.variable.var_type in ['num24', 'f24']):
+                self.code += f"     sh %bs %ac\n";
+            elif (node.variable.var_type == 'char'):
+                self.code += f"     sb %bs %ac\n";
+        elif isinstance(lvalue, UnaryOpNode) and lvalue.op.type == TokenType.STAR:
+            self.visit(rvalue);
+            self.visit(lvalue.operand);
             
-        if (node.variable.var_type == 'num16') or (node.variable.var_type == 'f16'):
-            self.code += f"     sw %bs %ac\n";
-        elif (node.variable.var_type.endswith('*')) or (node.variable.var_type in ['num24', 'f24']):
-            self.code += f"     sh %bs %ac\n";
-        elif (node.variable.var_type == 'char'):
-            self.code += f"     sb %bs %ac\n";
+            self.code += f"     pop %bs\n";
+            self.code += f"     pop %ac\n";
+            
+            pointer_type = lvalue.operand.var_type
+            pointed_to_type = pointer_type[:-1];
+            
+            if pointed_to_type == 'char':
+                self.code += f"     sb %bs %ac\n";
+            elif pointed_to_type == 'num16' or pointed_to_type == 'f16':
+                self.code += f"     sw %bs %ac\n";
+            else:
+                self.code += f"     sh %bs %ac\n";
+        else:
+            self._error(lvalue, "Invalid target for assignment.")
             
     def visit_VarAccessNode(self, node: VarAccessNode):
         prefix = self._get_current_namespace_prefix()
         if node.var_name in self.local_vars:
-            node.var_type = self.local_vars[node.var_name]['type'];
             offset = self.local_vars[node.var_name]['offset'];
             self.code += f"     mov %bs %bp\n";
             if offset > 0:
@@ -285,7 +312,7 @@ class Compiler(ASTVisitor):
         
         if op_type == TokenType.AMPERSAND: 
             if not isinstance(node.operand, VarAccessNode):
-                self._error(...)
+                raise Exception("Compiler error: & can only be applied to variables")
             
             var_name = node.operand.var_name
             
@@ -302,12 +329,9 @@ class Compiler(ASTVisitor):
             self.code += "    psh %ac\n"
 
         elif op_type == TokenType.STAR:
-            pointer_type = self.visit(node.operand)
+            self.visit(node.operand)
             
-            if not isinstance(pointer_type, str) or not pointer_type.endswith('*'):
-                self._error(...)
-            
-            pointed_to_type = pointer_type[:-1]
+            pointed_to_type = node.var_type 
             
             self.code += "    pop %bs\n"
         
@@ -317,13 +341,17 @@ class Compiler(ASTVisitor):
                 self.code += "    lh %bs %ac\n"
             elif pointed_to_type == 'char':
                 self.code += "    lb %bs %ac\n"
-            else:
-                self._error(...)
             
             self.code += "    psh %ac\n"
             
-            return pointed_to_type
 
     def visit_TypeCastNode(self, node: TypeCastNode):
         self.visit(node.expression);
         return node.target_type;
+    
+    def visit_ReturnNode(self, node: ReturnNode):
+        if node.value:
+            self.visit(node.value)
+            self.code += "    pop %ac\n"
+        
+        self.code += f"    jmp .end\n"

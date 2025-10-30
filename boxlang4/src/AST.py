@@ -5,11 +5,14 @@ class ASTNode:
     def __repr__(self):
         return self.__class__.__name__;
     
-class ExpressionNode(ASTNode): pass;
+class ExpressionNode(ASTNode):
+    def __init__(self):
+        self.var_type: Optional[str] = None
 
 class LiteralNode(ExpressionNode):
-    def __init__(self, value):
+    def __init__(self, value, token: Token = None):
         self.value = value;
+        self.token = token;
     def __repr__(self):
         return f"{self.__class__.__name__}({self.value})";
     
@@ -25,11 +28,13 @@ class AsmNode(StatementNode):
     def __repr__(self):
         return f"\nAsmNode('{self.code}')";
     
-class FunctionCallNode(StatementNode):
-    def __init__(self, name: str, args: List[ExpressionNode], namespace: str):
-        self.name = name;
-        self.args = args;
-        self.namespace = namespace;
+class FunctionCallNode(ExpressionNode, StatementNode):
+    def __init__(self, name: str, args: List[ExpressionNode], namespace: str, name_token: Token):
+        super().__init__()
+        self.name = name
+        self.name_token = name_token
+        self.args = args
+        self.namespace = namespace
     def __repr__(self):
         return f"\nFunctionCallNode(name='{self.name}', args={self.args})";
     
@@ -63,9 +68,10 @@ class ProgramNode(ASTNode):
         return f"ProgramNode({self.declarations})"
     
 class VarDeclarationNode(ASTNode):
-    def __init__(self, var_type: str, var_name: str, value: Optional[ExpressionNode] = None):
+    def __init__(self, var_type: str, var_name: str, value: Optional[ExpressionNode], name_token: Token = None):
         self.var_type = var_type
         self.var_name = var_name
+        self.name_token = name_token
         self.value = value
         
 class AssignmentNode(StatementNode):
@@ -74,8 +80,9 @@ class AssignmentNode(StatementNode):
         self.expression = expression
         
 class VarAccessNode(ExpressionNode):
-    def __init__(self, var_name: str, var_type: str='num24'):
+    def __init__(self, var_name: str, token: Token = None, var_type: str='num24'):
         self.var_name = var_name
+        self.token = token
         self.var_type = var_type
         
 class BinaryOpNode(ExpressionNode):
@@ -93,3 +100,9 @@ class TypeCastNode(ExpressionNode):
     def __init__(self, target_type: str, expression: ExpressionNode):
         self.target_type = target_type
         self.expression = expression
+        
+class ReturnNode(StatementNode):
+    def __init__(self, value: Optional[ExpressionNode], token: Token):
+        super().__init__()
+        self.value = value
+        self.token = token

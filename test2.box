@@ -3,9 +3,8 @@
 
 box _start[] -> void (
     char sym: 'b';
-    char* str: &sym;
 
-    char data: *str;
+    char data: *(char*)(&sym);
     open putc[data];
     open putc[0xA];
     open puts["Hello, World!"];

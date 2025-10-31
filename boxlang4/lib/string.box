@@ -1,0 +1,49 @@
+$ifndef STD_STRING 
+$define STD_STRING 1
+
+namespace std (
+
+    box strlen[char* str] -> num24 (
+        num24 len: 0;
+        while[*str != '\0'] (
+            len:len+1;
+            str:str+1;
+        )
+
+        ret len;
+    )
+
+    box strcpy[char* dst, char* src] -> void (
+        while [*src != '\0'] (
+            *dst: *src;
+            dst:dst+1;
+            src:src+1;
+        )
+        *dst: '\0';
+    )
+
+    box strcmp[char* s1, char* s2] -> num24 (
+        while [*s1 != '\0' && *s2 != '\0'] (
+            if [*s1 != *s2] (
+                ret (num24)*s1 - (num24)*s2;
+            )
+            s1:s1+1;
+            s2:s2+1;
+        )
+
+        ret (num24)*s1 - (num24)*s2;
+    )
+
+    box strcat[char* dst, char* src] -> void (
+        num24 len: open strlen[dst];
+        dst:dst+len;
+        while[*src != '\0'] (
+            *dst: *src;
+            dst:dst+1;
+            src:src+1;
+        )
+        *dst: '\0';
+    )
+)
+
+$endif

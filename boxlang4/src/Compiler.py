@@ -296,6 +296,48 @@ class Compiler(ASTVisitor):
     def visit_BinaryOpNode(self, node: BinaryOpNode):
         op = node.op.type;
         
+        if op == TokenType.LOGICAL_OR:
+            true_label = self._new_label("lor_true")
+            end_label = self._new_label("lor_end")
+            
+            self.visit(node.left)
+            self.code += "     pop %ac\n"
+            self.code += "     cmp %ac 0\n"
+            self.code += f"     jne {true_label}\n"
+
+            self.visit(node.right)
+            self.code += "     pop %ac\n"
+            self.code += "     cmp %ac 0\n"
+            self.code += f"     jne {true_label}\n"
+
+            self.code += "     psh 0\n"
+            self.code += f"     jmp {end_label}\n"
+            self.code += f"{true_label}:\n"
+            self.code += "     psh 1\n"
+            self.code += f"{end_label}:\n"
+            return "num24"
+
+        if op == TokenType.LOGICAL_AND:
+            false_label = self._new_label("land_false")
+            end_label = self._new_label("land_end")
+
+            self.visit(node.left)
+            self.code += "     pop %ac\n"
+            self.code += "     cmp %ac 0\n"
+            self.code += f"     je {false_label}\n"
+
+            self.visit(node.right)
+            self.code += "     pop %ac\n"
+            self.code += "     cmp %ac 0\n"
+            self.code += f"     je {false_label}\n"
+
+            self.code += "     psh 1\n"
+            self.code += f"     jmp {end_label}\n"
+            self.code += f"{false_label}:\n"
+            self.code += "     psh 0\n"
+            self.code += f"{end_label}:\n"
+            return "num24"
+        
         simple_comparison_map = {
             TokenType.EQUAL_EQUAL: "je",
             TokenType.NOT_EQUAL:   "jne",
@@ -350,11 +392,16 @@ class Compiler(ASTVisitor):
                 self.code += f"     mul %ac %bs\n";
             elif op == TokenType.SLASH:
                 self.code += f"     div %ac %bs\n";
+            elif op == TokenType.AMPERSAND: 
+                self.code += f"  and %ac %bs\n";
+            elif op == TokenType.BITWISE_OR: 
+                self.code += f"   or %ac %bs\n";
+            elif op == TokenType.BITWISE_XOR: 
+                self.code += f"  xor %ac %bs\n";
             else:
                 pass
             
             self.code += f"     psh %ac\n";
-            
             return left_type
         
     def visit_StringLiteralNode(self, node: StringLiteralNode):

@@ -1,0 +1,9 @@
+$include <cli>
+
+box _start[] -> void (
+    open cli::puts["Hello, World!"];
+    open cli::putc['\n'];
+
+    asm["psh 0"];
+    asm["int $0"];
+)

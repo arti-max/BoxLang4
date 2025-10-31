@@ -16,28 +16,25 @@ class ErrorReporter:
         self._errors.append(full_message)
         self._had_error = True
 
+    
     def _format_error(self, file: str, line: int, column: int, message: str, error_type: str, suggestion: str) -> str:
-        corrected_line = line - 1
         
         header = f"error[{error_type}]: {message}\n"
-        location = f"  --> {file}:{corrected_line}:{column}\n"
+        location = f"  --> {file}:{line}:{column}\n"
         
-        
-        line_content = ""
-        if file in self._source_lines and 1 <= corrected_line <= len(self._source_lines[file]):
-            line_idx = corrected_line - 1
+        context = ""
+        if file in self._source_lines and 1 <= line <= len(self._source_lines[file]):
+            line_idx = line - 1
             line_content = self._source_lines[file][line_idx].rstrip()
 
-            line_padding = " " * (len(str(corrected_line)) + 1)
-            code_line = f"{corrected_line} | {line_content}\n"
+            line_padding = " " * (len(str(line)) + 1)
+            code_line = f"{line} | {line_content}\n"
             
             pointer_padding = " " * (column - 1)
             pointer_line = f"{line_padding}| {pointer_padding}^\n"
             
             context = code_line + pointer_line
-        else:
-            context = ""
-
+        
         suggestion_text = ""
         if suggestion:
             suggestion_text = f"  = help: {suggestion}\n"

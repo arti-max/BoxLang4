@@ -77,6 +77,7 @@ class Lexer:
         self.skip_whitespace()
         filename = self.parse_string_lit();
         self.current_file = filename
+        self.line = 1
         
     def parse_string_lit(self):
         curr_str = '';
@@ -244,6 +245,12 @@ class Lexer:
             if (char == '>') and (peek == '='):
                 tokens.append(self.create_token(TokenType.GREATHER_EQUAL, '>='));
                 self.advance(2); continue;
+            if (char == '&') and (peek == '&'):
+                tokens.append(self.create_token(TokenType.LOGICAL_AND, '&&'));
+                self.advance(2); continue;
+            if (char == '|') and (peek == '|'):
+                tokens.append(self.create_token(TokenType.LOGICAL_OR, '||'));
+                self.advance(2); continue;
             
             symbol_map = {
                 '+': TokenType.PLUS,
@@ -260,6 +267,8 @@ class Lexer:
                 ';': TokenType.SEMICOLON,
                 '&': TokenType.AMPERSAND,
                 ',': TokenType.COMMA,
+                '|': TokenType.BITWISE_OR,
+                '^': TokenType.BITWISE_XOR,
             }
             
             if char in symbol_map:

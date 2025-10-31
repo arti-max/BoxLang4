@@ -24,6 +24,13 @@ class TokenType(Enum):
     F24             = auto()    # f24
     VOID            = auto()    # void
     
+    # logic
+    LOGICAL_AND     = auto()  # &&
+    LOGICAL_OR      = auto()  # ||
+    
+    # bitwise
+    BITWISE_OR      = auto()  # |
+    BITWISE_XOR     = auto()  # ^
     
     # arythmetic
     PLUS            = auto()    # +

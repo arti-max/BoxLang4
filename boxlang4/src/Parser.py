@@ -145,7 +145,52 @@ class Parser:
         return AssignmentNode(lvalue_expr, rvalue_expr);
     
     def parse_expression(self) -> ExpressionNode:
-        return self.parse_equality()
+        return self.parse_logical_or()
+    
+    def parse_logical_or(self) -> ExpressionNode:
+        left = self.parse_logical_and()
+        while self.current_token().type == TokenType.LOGICAL_OR:
+            op = self.current_token()
+            self.advance()
+            right = self.parse_logical_and()
+            left = BinaryOpNode(left, op, right)
+        return left
+
+    def parse_logical_and(self) -> ExpressionNode:
+        left = self.parse_bitwise_or()
+        while self.current_token().type == TokenType.LOGICAL_AND:
+            op = self.current_token()
+            self.advance()
+            right = self.parse_bitwise_or()
+            left = BinaryOpNode(left, op, right)
+        return left
+
+    def parse_bitwise_or(self) -> ExpressionNode:
+        left = self.parse_bitwise_xor()
+        while self.current_token().type == TokenType.BITWISE_OR:
+            op = self.current_token()
+            self.advance()
+            right = self.parse_bitwise_xor()
+            left = BinaryOpNode(left, op, right)
+        return left
+
+    def parse_bitwise_xor(self) -> ExpressionNode:
+        left = self.parse_bitwise_and()
+        while self.current_token().type == TokenType.BITWISE_XOR:
+            op = self.current_token()
+            self.advance()
+            right = self.parse_bitwise_and()
+            left = BinaryOpNode(left, op, right)
+        return left
+
+    def parse_bitwise_and(self) -> ExpressionNode:
+        left = self.parse_equality()
+        while self.current_token().type == TokenType.AMPERSAND:
+            op = self.current_token()
+            self.advance()
+            right = self.parse_equality()
+            left = BinaryOpNode(left, op, right)
+        return left
     
     def parse_equality(self) -> ExpressionNode:
         left = self.parse_comparison()

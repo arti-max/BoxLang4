@@ -1,0 +1,12 @@
+$ifndef STD_LIB
+$define STD_LIB 1   
+
+namespace std (
+
+    box malloc[num24 size] -> void* (
+        ## пока нахуй не нужон
+    )
+    
+)
+
+$endif

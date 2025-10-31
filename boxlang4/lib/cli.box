@@ -3,16 +3,20 @@ $define cli_incl 1
 
 namespace cli (
 
+    box putc[char c] -> void (
+        asm["psh (c)"];
+        asm["int $2"];
+    )
+
     box puts[char* s] -> void (
-        while [*s != 0] (
+        while [*s != (char)0] (
             open putc[*s];
             s:s+1;
         )
     )
 
-    box putc[char c] -> void (
-        asm["psh (c)"];
-        asm["int $2"];
+    box print_nl[] -> void (
+        open putc[(char)0xA];
     )
 
 )

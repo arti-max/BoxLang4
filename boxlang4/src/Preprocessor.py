@@ -63,7 +63,7 @@ class Preprocessor:
                             start = directive_line.find('<') + 1
                             end = directive_line.find('>')
                             path = directive_line[start:end]
-                            include_filename = "boxlang4/lib/" + path
+                            include_filename = "boxlang4/lib/" + path + ".box"
                             column += start
                         else:
                             start = directive_line.find('"') + 1

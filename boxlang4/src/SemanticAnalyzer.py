@@ -52,10 +52,12 @@ class SemanticAnalyzer(ASTVisitor):
         self.pop_scope()
 
     def visit_NamespaceNode(self, node: NamespaceNode):
-        self.push_scope()
+        namespace_prefix = f"{node.name}::"
         for decl in node.body:
-            self.visit(decl)
-        self.pop_scope()
+            if isinstance(decl, FunctionDeclarationNode):
+                full_name = f"{namespace_prefix}{decl.name}"
+                self.declare_symbol(full_name, {'type': 'function', 'node': decl}, decl)
+                self.visit(decl)
             
     def visit_FunctionDeclarationNode(self, node: FunctionDeclarationNode):
         self.declare_symbol(node.name, {'type': 'function', 'node': node}, node=None) 
@@ -102,9 +104,14 @@ class SemanticAnalyzer(ASTVisitor):
             self._error(f"Type mismatch: cannot assign '{rvalue_type}' to '{lvalue_type}'.", node.expression)
 
     def visit_FunctionCallNode(self, node: FunctionCallNode):
-        func_symbol = self.lookup_symbol(node.name)
+        if node.namespace:
+            full_name = f"{node.namespace}::{node.name}"
+        else:
+            full_name = node.name
+
+        func_symbol = self.lookup_symbol(full_name)
         if not func_symbol or func_symbol.get('type') != 'function':
-            self._error(f"Call to undeclared function '{node.name}'.", node)
+            self._error(f"Call to undeclared function '{full_name}'.", node)
         
         func_node = func_symbol['node']
         return_type = func_node.return_type
@@ -138,6 +145,15 @@ class SemanticAnalyzer(ASTVisitor):
         left_type = self.visit(node.left)
         right_type = self.visit(node.right)
         op = node.op.type
+        
+        logical_ops = [TokenType.LOGICAL_AND, TokenType.LOGICAL_OR]
+        bitwise_ops = [TokenType.AMPERSAND, TokenType.BITWISE_OR, TokenType.BITWISE_XOR]
+        
+        if op in logical_ops or op in bitwise_ops:
+            if 'num' not in left_type or 'num' not in right_type:
+                 self._error(f"Operator '{node.op.lexeme}' requires integer operands.", node)
+            node.var_type = left_type
+            return node.var_type
         
         is_left_ptr = left_type.endswith('*')
         is_right_ptr = right_type.endswith('*')
